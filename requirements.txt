@@ -18,6 +18,7 @@ notebook
 ipykernel
 PyPDF2 
 markdown2
+fpdf
 pdfminer.six
 reportlab
 langchain_huggingface
