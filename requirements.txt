@@ -17,5 +17,7 @@ jupyter
 notebook
 ipykernel
 PyPDF2 
+markdown2
 pdfminer.six
 reportlab
+langchain_huggingface
