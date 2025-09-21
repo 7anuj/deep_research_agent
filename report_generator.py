@@ -1,48 +1,63 @@
 # report_generator.py
-from langchain.prompts import PromptTemplate
-from langchain_community.llms import Ollama
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
+from io import BytesIO
+import io
+import markdown2
+from fpdf import FPDF
+import os
 
-llm = Ollama(model="llama3", base_url="http://localhost:11434")
+# ------------------------
+# Generate Report Text
+# ------------------------
 
-summary_prompt = PromptTemplate(
-    input_variables=["qa_pairs"],
-    template="""
-You are a research assistant. Summarize the following Q&A pairs into a structured, coherent research report.
-
-Q&A Pairs:
-{qa_pairs}
-
-Format the report with:
-1. Introduction
-2. Key Findings
-3. Detailed Analysis
-4. Conclusion
-"""
-)
 
 def generate_report(history):
-    """Generate research report text from chat history"""
-    qa_text = "\n\n".join([f"Q: {q}\nA: {a}" for q, a in history])
-    chain = summary_prompt | llm
-    report_text = chain.invoke({"qa_pairs": qa_text})
-    return report_text
+    report = ""
+    for i, chat in enumerate(history, 1):
+        report += f"Q{i}: {chat['question']}\n"
+        report += f"A{i}: {chat['answer']}\n"
+        report += "Sources:\n"
+        for doc in chat["sources"]:
+            report += f"- {doc.metadata.get('source', 'Unknown')}\n"
+        report += "\n"
+    return report
 
-def export_markdown(report_text, filename="research_report.md"):
-    with open(filename, "w", encoding="utf-8") as f:
-        f.write(report_text)
-    return filename
+# ------------------------
+# Export as Markdown
+# ------------------------
+def export_markdown(report_text):
+    """
+    Convert report text to Markdown bytes
+    """
+    md_bytes = report_text.encode("utf-8")
+    return md_bytes
 
-def export_pdf(report_text, filename="research_report.pdf"):
-    doc = SimpleDocTemplate(filename)
-    styles = getSampleStyleSheet()
-    story = []
 
-    for line in report_text.split("\n"):
-        if line.strip():
-            story.append(Paragraph(line, styles["Normal"]))
-            story.append(Spacer(1, 12))
+# ------------------------
+# Export as PDF
+# ------------------------
+# report_generator.py
 
-    doc.build(story)
-    return filename
+def export_pdf(text):
+    """
+    Export text report to a PDF with Unicode support using DejaVuSans.
+    Returns a BytesIO object for Streamlit download.
+    """
+    pdf = FPDF()
+    pdf.add_page()
+
+    # Path to DejaVu font folder
+    font_folder = os.path.join(os.path.dirname(__file__), "dejavusans")
+    ttf_path = os.path.join(font_folder, "DejaVuSans.ttf")
+
+    # Add DejaVu font (Unicode)
+    pdf.add_font("DejaVu", "", ttf_path, uni=True)
+    pdf.set_font("DejaVu", "", 12)
+
+    # Replace bullets and write lines
+    for line in text.split("\n"):
+        line = line.replace("* ", "• ")
+        pdf.multi_cell(0, 8, line)
+
+    # Export to bytes
+    pdf_bytes = pdf.output(dest='S').encode('latin1', 'replace')  # returns str, encode to bytes
+    return io.BytesIO(pdf_bytes)
