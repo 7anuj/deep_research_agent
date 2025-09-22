@@ -22,3 +22,5 @@ fpdf
 pdfminer.six
 reportlab
 langchain_huggingface
+langchain_google_genai
+google_ai_generative

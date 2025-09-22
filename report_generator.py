@@ -46,7 +46,7 @@ def export_pdf(text):
     pdf.add_page()
 
     # Path to DejaVu font folder
-    font_folder = os.path.join(os.path.dirname(__file__), "dejavusans")
+    font_folder = os.path.join(os.path.dirname(__file__), "C:\work\deep_research_agent\dejavusans")
     ttf_path = os.path.join(font_folder, "DejaVuSans.ttf")
 
     # Add DejaVu font (Unicode)

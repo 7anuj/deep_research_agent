@@ -1,17 +1,34 @@
 import os
 import tempfile
+from dotenv import load_dotenv
+
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.llms import Ollama
+from langchain_community.llms import Ollama  # Keep only if needed for fallback
 from langchain.chains import ConversationalRetrievalChain
 from langchain.retrievers import EnsembleRetriever
 from reasoning_tracker import ReasoningTracker
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 # -------------------------------
-# Initialize LLM + Embeddings
+# Load environment variables
 # -------------------------------
-llm = Ollama(model="llama3", base_url="http://localhost:11434")
+load_dotenv()
+api_key = os.environ.get("GOOGLE_API_KEY")
+if not api_key:
+    raise ValueError("❌ GOOGLE_API_KEY not found. Add it to your .env file.")
+
+# -------------------------------
+# Initialize Gemini LLM + Embeddings
+# -------------------------------
+llm_summarizer = ChatGoogleGenerativeAI(
+    model="gemini-1.5-flash-latest",  # or "gemini-2.0-flash-latest" if available
+    api_key=api_key,
+    temperature=0.2,                  # adjust for creativity vs. precision
+    max_output_tokens=1024             # adjust token limit as needed
+)
+
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
@@ -30,7 +47,7 @@ def load_prebuilt_retriever(storage_folder="storage"):
             embeddings,
             allow_dangerous_deserialization=True
         )
-        return vectorstore.as_retriever(search_kwargs={"k": 5})
+        return vectorstore.as_retriever(search_kwargs={"k": 2})
     else:
         raise FileNotFoundError(
             f"❌ No FAISS index found at {storage_folder}. Run ingest.py first to build it."
@@ -56,7 +73,7 @@ def load_user_retriever(file_paths):
         return None
 
     vectorstore = FAISS.from_documents(docs, embeddings)
-    return vectorstore.as_retriever(search_kwargs={"k": 5})
+    return vectorstore.as_retriever(search_kwargs={"k": 2})
 
 # -------------------------------
 # Combined Retriever + QA Chain
@@ -81,16 +98,19 @@ def build_combined_chain(prebuilt_retriever=None, user_retriever=None):
     else:
         combined_retriever = EnsembleRetriever(
             retrievers=retrievers,
-            weights=[0.5] * len(retrievers)  # equal weighting; adjust if needed
+            weights=[0.5] * len(retrievers)  # equal weighting
         )
 
     tracker = ReasoningTracker()
 
+    # Use Gemini API LLM for summarization / QA
     qa_chain = ConversationalRetrievalChain.from_llm(
-        llm,
+        llm_summarizer,               # ✅ Gemini LLM here
         combined_retriever,
         return_source_documents=True,
         callbacks=[tracker]
     )
 
     return qa_chain, tracker
+
+# --------------------------
